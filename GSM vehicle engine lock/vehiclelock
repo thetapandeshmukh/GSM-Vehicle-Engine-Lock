@@ -1,0 +1,70 @@
+#include <xc.h>
+#define _XTAL_FREQ 20000000  
+
+#pragma config OSC = HS, WDT = OFF, LVP = OFF, BOREN = ON
+
+const char correct_password[] = "1234"; 
+char entered_password[5]; 
+unsigned int attempt_count = 0;
+
+void UART_Init(void) {
+    TRISC6 = 0;  
+    TRISC7 = 1; 
+    SPBRG = 31;  
+    TXSTA = 0x24;  
+    RCSTA = 0x90; 
+}
+
+void UART_Write(char data) {
+    while (!TXIF) ; 
+    TXREG = data;   
+}
+
+void UART_Write_Text(char *text) {
+    while (*text) {
+        UART_Write(*text++);
+    }
+}
+
+void Send_SMS(const char *message) {
+    UART_Write_Text("AT+CMGF=1\r"); 
+    __delay_ms(1000);
+    UART_Write_Text("AT+CMGS=\"+1234567890\"\r"); 
+    __delay_ms(1000);
+    UART_Write_Text(message); 
+    UART_Write(0x1A); 
+    __delay_ms(1000);
+}
+
+void Lock_Engine() {
+    LATBbits.LATB0 = 0; 
+    Send_SMS("Engine locked due to unauthorized access!");
+}
+
+void Unlock_Engine() {
+    LATBbits.LATB0 = 1; 
+}
+
+void Check_Password() {
+    if (strcmp(entered_password, correct_password) == 0) {
+        Unlock_Engine(); 
+    } else {
+        attempt_count++;
+        if (attempt_count >= 3) {
+            Lock_Engine(); 
+        }
+    }
+    memset(entered_password, 0, sizeof(entered_password)); 
+    attempt_count = 0;
+}
+
+void main(void) {
+    TRISB0 = 0; 
+    UART_Init();
+    Unlock_Engine(); 
+
+    while (1) {
+       
+        Check_Password();
+    }
+}
